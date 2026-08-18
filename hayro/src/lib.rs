@@ -60,7 +60,7 @@ use vello_cpu::color::Srgb;
 use vello_cpu::color::palette::css::TRANSPARENT;
 use vello_cpu::color::palette::css::WHITE;
 use vello_cpu::peniko::{Compose, Fill, Mix};
-use vello_cpu::{Mask, Pixmap, RenderContext, peniko};
+use vello_cpu::{Pixmap, RenderContext, peniko};
 
 mod clip;
 mod glyph;
@@ -89,7 +89,6 @@ pub(crate) struct Renderer<'a> {
     global: &'a GlobalState,
     pub(crate) ctx: RenderContext,
     pub(crate) inside_pattern: bool,
-    pub(crate) soft_mask_cache: FxHashMap<u128, Mask>,
     pub(crate) in_type3_glyph: bool,
 }
 
@@ -104,7 +103,6 @@ impl<'r> Renderer<'r> {
             global,
             ctx: RenderContext::new_with(width, height, settings),
             inside_pattern: false,
-            soft_mask_cache: FxHashMap::default(),
             in_type3_glyph: false,
         }
     }
