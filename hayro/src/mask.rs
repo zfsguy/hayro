@@ -1,5 +1,5 @@
 use crate::{GlobalState, Renderer, convert_blend_mode, derive_settings};
-use hayro_interpret::{BlendMode, CacheKey, MaskType, SoftMask};
+use hayro_interpret::{BlendMode, MaskType, SoftMask};
 use kurbo::Rect;
 use vello_cpu::color::palette::css::BLACK;
 use vello_cpu::color::{AlphaColor, Srgb};
@@ -9,14 +9,17 @@ impl Renderer<'_> {
     pub(super) fn apply_soft_mask(&mut self, mask: Option<&SoftMask<'_>>) {
         let settings = *self.ctx.render_settings();
         let global = self.global;
+        // Masks are deliberately redrawn per use: reusing a cached
+        // `Mask` renders subsequent masked paints blank when the mask
+        // group's content is itself a shading (a luminosity mask built
+        // from a gradient — the second `sh` painted under such a mask
+        // produced nothing). Redrawing restores correctness; the exact
+        // failure inside the cached-reuse path is still to be
+        // minimized before this can be a targeted cache fix.
         let mask = mask.map(|m| {
             let width = self.ctx.width();
             let height = self.ctx.height();
-
-            self.soft_mask_cache
-                .entry(m.cache_key())
-                .or_insert_with(|| draw_soft_mask(m, settings, width, height, global))
-                .clone()
+            draw_soft_mask(m, settings, width, height, global)
         });
 
         if let Some(mask) = mask {
@@ -38,15 +41,11 @@ impl Renderer<'_> {
             None,
             Some(convert_blend_mode(blend_mode)),
             Some(opacity),
-            // TODO: Deduplicate
+            // Redrawn per use for the same reason as `apply_soft_mask`.
             mask.map(|m| {
                 let width = self.ctx.width();
                 let height = self.ctx.height();
-
-                self.soft_mask_cache
-                    .entry(m.cache_key())
-                    .or_insert_with(|| draw_soft_mask(&m, settings, width, height, global))
-                    .clone()
+                draw_soft_mask(&m, settings, width, height, global)
             }),
             None,
         );
