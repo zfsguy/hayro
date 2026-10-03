@@ -337,9 +337,20 @@ impl Renderer<'_> {
             }
             out
         } else if matches!(&image_data, RenderImageData::Rgb(_)) && needs_resize {
-            let RenderImageData::Rgb(rgb) = image_data else {
+            let RenderImageData::Rgb(mut rgb) = image_data else {
                 unreachable!()
             };
+
+            // Resampling an image with alpha is only correct on premultiplied
+            // color, or the color of fully transparent pixels bleeds into the
+            // edges. Premultiplying the RGB plane in place and resizing it
+            // and the alpha plane separately gives the same result as
+            // resizing an interleaved premultiplied RGBA buffer, without
+            // allocating that buffer at the full image size.
+            if let Some(alpha) = &alpha_data {
+                premultiply_rgb(&mut rgb.data, &alpha.data);
+                needs_premultiplication = false;
+            }
 
             let resized = self.resize_image_data(
                 rgb.data,
@@ -679,6 +690,17 @@ fn premultiply_rgba(level: Level, data: &mut [u8]) {
         pixel[0] = div_255(u16::from(pixel[0]) * alpha) as u8;
         pixel[1] = div_255(u16::from(pixel[1]) * alpha) as u8;
         pixel[2] = div_255(u16::from(pixel[2]) * alpha) as u8;
+    }
+}
+
+/// Premultiply a packed RGB plane by a separate alpha plane, in place,
+/// with the same rounding as [`premultiply_rgba`].
+fn premultiply_rgb(rgb: &mut [u8], alpha: &[u8]) {
+    for (px, a) in rgb.chunks_exact_mut(3).zip(alpha) {
+        let alpha = u16::from(*a);
+        px[0] = div_255(u16::from(px[0]) * alpha) as u8;
+        px[1] = div_255(u16::from(px[1]) * alpha) as u8;
+        px[2] = div_255(u16::from(px[2]) * alpha) as u8;
     }
 }
 
